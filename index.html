@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trabajo en caliente cerca de solventes · Simulador</title>
+<style>
+:root{--verde:#2f4a3a;--terracota:#c2542d;--fondo:#f4f3ee;--tinta:#1d2b24;--suave:#e6ede7}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--fondo);color:var(--tinta);line-height:1.55;font-size:17px}
+main{max-width:760px;margin:0 auto;padding:20px 16px 48px}
+.tarjeta{background:#fff;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.12);margin-bottom:16px}
+h1{font-size:1.6rem;margin:0 0 10px;color:var(--verde);line-height:1.25}
+h2{font-size:1.3rem;margin:0 0 10px;color:var(--verde);line-height:1.25}
+h2:focus{outline:none}
+.paso{font-size:.85rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--terracota);margin:0 0 6px}
+.nota{font-size:.9rem;color:#46564e}
+button{font:inherit;cursor:pointer}
+.op{display:block;width:100%;text-align:left;padding:14px 16px;margin:10px 0;border:2px solid var(--verde);border-radius:10px;background:#fff;color:var(--tinta)}
+.op:hover{background:var(--suave)}
+.op b{color:var(--terracota);margin-right:6px}
+.primario{background:var(--verde);color:#fff;border:0;border-radius:10px;padding:12px 22px;font-weight:600}
+.secundario{background:#fff;color:var(--verde);border:2px solid var(--verde);border-radius:10px;padding:10px 18px;font-weight:600}
+button:focus-visible,input:focus-visible{outline:3px solid var(--terracota);outline-offset:2px}
+.final-seguro{background:#eaf2e4}
+.final-incidente{background:#faece6}
+ul.lista{padding-left:1.2rem;margin:8px 0}
+.vars{width:100%;border-collapse:collapse;font-size:.95rem;margin-top:6px}
+.vars td{padding:6px 8px;border-bottom:1px solid #dde3de}
+.vars td:first-child{color:#46564e;width:55%}
+
+figure{margin:0 0 16px}
+figure img{width:100%;height:auto;border-radius:10px;display:block}
+.barra{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+label{display:block;font-weight:600;margin:12px 0 4px}
+input[type=text]{width:100%;font:inherit;padding:10px 12px;border:2px solid #aab6ad;border-radius:8px}
+.error{color:#a12d12;font-weight:600;margin-top:8px}
+.codigo{background:#f1f3ef;border:1px dashed #8a9a8f;border-radius:8px;padding:12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem;white-space:pre-wrap;word-break:break-word}
+.estado{margin-top:8px;font-weight:600;color:var(--verde)}
+.pie{font-size:.85rem;color:#46564e;margin-top:20px}
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite"></main>
+<script>
+
+// ---- Configuración de la capa multimodal y del registro ----
+const CAPA = {
+  voz: true,
+  registro: {
+    identificar: true,
+    // Estrategia 2: formulario de Google con respuestas precargadas.
+    // Pegar acá el enlace prellenado, con las palabras ESTUDIANTE, RECORRIDO y RESULTADO como respuestas. Dejar vacío para no usarla.
+    forms: { enlace: '' },
+    // Estrategia 3: planilla de Google mediante Apps Script (URL que termina en /exec).
+    planilla: { url: '' }
+  }
+};
+
+const SIM = {
+  titulo: "Trabajo en caliente cerca de solventes",
+  intro: 'Sos responsable de seguridad en una planta de procesos. Un operario necesita soldar una cañería cerca de un tanque de solvente inflamable y quiere empezar ya. Vas a tomar las decisiones que corresponden a tu rol y a ver sus consecuencias.',
+  parametro: 'Caso ilustrativo. En esta planta ficticia, el procedimiento no permite trabajo en caliente con lecturas superiores al 10 % del límite inferior de explosividad (LIE). Los valores y procedimientos reales dependen de la normativa y de cada planta.',
+  varsIniciales: { vapores: 14, permiso: 'sin firmar', ventilacion: false, vigia: false, medido: false },
+  nodos: {
+  "N1": {
+    "id": "N1",
+    "titulo": "Llegada al sector",
+    "texto": "Es martes a la tarde. Un operario tiene que soldar una brida de una cañería a unos seis metros de un tanque de solvente inflamable, dentro de un área clasificada. Quiere empezar ya porque la línea está parada. El permiso de trabajo en caliente todavía no está firmado.",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Detener el inicio, pedir el permiso y medir la atmósfera antes de autorizar",
+        "efectos": {
+          "medido": true
+        },
+        "destino": "N2"
+      },
+      {
+        "id": "B",
+        "texto": "Autorizar con ventilación natural: hay viento y el tanque está cerrado",
+        "efectos": {},
+        "destino": "F2"
+      },
+      {
+        "id": "C",
+        "texto": "Autorizar y dejar un extintor a mano, sin más trámites",
+        "efectos": {},
+        "destino": "F2"
+      }
+    ],
+    "voz": "Es martes a la tarde. Un operario tiene que soldar una brida de una cañería a unos seis metros de un tanque de solvente inflamable, dentro de un área clasificada. Quiere empezar ya porque la línea está parada. El permiso de trabajo en caliente todavía no está firmado.",
+    "img": "img/n1_llegada.jpg",
+    "alt": "Sector de planta con un tanque de solvente a pocos metros de una cañería, un cartel de área clasificada y un operario con equipo de soldar listo para empezar."
+  },
+  "N2": {
+    "id": "N2",
+    "titulo": "Medición de la atmósfera",
+    "texto": "Con el explosímetro (detector de gases) en el punto de trabajo, la lectura marca 14 % del LIE. En esta planta, el máximo permitido para trabajo en caliente es 10 % del LIE.",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Ventilar con un extractor, controlar el origen de los vapores y volver a medir",
+        "efectos": {
+          "ventilacion": true,
+          "vapores": 6
+        },
+        "destino": "N3"
+      },
+      {
+        "id": "B",
+        "texto": "Autorizar igual: 14 % es una lectura baja",
+        "efectos": {},
+        "destino": "F2"
+      }
+    ],
+    "voz": "Con el explosímetro, que es el detector de gases, en el punto de trabajo, la lectura marca catorce por ciento del límite inferior de explosividad. En esta planta, el máximo permitido para trabajo en caliente es diez por ciento del límite inferior de explosividad.",
+    "img": "img/n2_medicion.jpg",
+    "alt": "Primer plano de un explosímetro en la zona de trabajo, con la pantalla mostrando una lectura por encima del máximo permitido."
+  },
+  "N3": {
+    "id": "N3",
+    "titulo": "Segunda medición",
+    "texto": "Con el extractor en marcha, la lectura baja a 6 % del LIE. Falta completar el permiso de trabajo en caliente.",
+    "opciones": [
+      {
+        "id": "A",
+        "texto": "Firmar el permiso, designar un vigía de fuego con extintor y mantener la medición durante el trabajo",
+        "efectos": {
+          "permiso": "firmado",
+          "vigia": true
+        },
+        "destino": "F1"
+      },
+      {
+        "id": "B",
+        "texto": "Firmar el permiso y autorizar sin vigía: el área ya está despejada",
+        "efectos": {
+          "permiso": "firmado"
+        },
+        "destino": "F2"
+      }
+    ],
+    "voz": "Con el extractor en marcha, la lectura baja a seis por ciento del límite inferior de explosividad. Falta completar el permiso de trabajo en caliente.",
+    "img": "img/n3_ventilacion.jpg",
+    "alt": "El mismo sector con el trabajo detenido y un extractor de aire en funcionamiento junto a la cañería."
+  },
+  "F1": {
+    "id": "F1",
+    "final": true,
+    "resultado": "seguro",
+    "titulo": "Trabajo seguro",
+    "texto": "El trabajo se hizo con la atmósfera por debajo del máximo, ventilación activa, permiso firmado y un vigía de fuego atento. No hubo incidentes.",
+    "voz": "El trabajo se hizo con la atmósfera por debajo del máximo, ventilación activa, permiso firmado y un vigía de fuego atento. No hubo incidentes.",
+    "img": "img/f1_trabajo_seguro.jpg",
+    "alt": "El operario soldando con protección completa, un vigía de fuego con extintor a su lado y el extractor funcionando."
+  },
+  "F2": {
+    "id": "F2",
+    "final": true,
+    "resultado": "incidente",
+    "titulo": "Incidente durante el trabajo",
+    "texto": "Se produjo un principio de incendio y el personal debió evacuar según el plan de emergencia.",
+    "voz": "Se produjo un principio de incendio y el personal debió evacuar según el plan de emergencia.",
+    "img": "img/f2_incidente.jpg",
+    "alt": "Humo y una chispa en el área de trabajo, con el personal retirándose hacia la salida según el plan de emergencia."
+  }
+}
+};
+
+let estado;
+const app = document.getElementById('app');
+
+function nuevoEstado() {
+  estado = { nodo: 'N1', historial: [], vars: Object.assign({}, SIM.varsIniciales), alumno: (estado && estado.alumno) || { nombre: '', legajo: '' } };
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function resumenVars(v) {
+  return [
+    ['Vapores en el sector', v.vapores + ' % del LIE' + (v.medido ? '' : ' (nadie lo midió)')],
+    ['Permiso de trabajo en caliente', v.permiso],
+    ['Ventilación forzada', v.ventilacion ? 'sí' : 'no'],
+    ['Vigía de fuego', v.vigia ? 'sí' : 'no']
+  ];
+}
+
+function analisis(v) {
+  const bien = [], mal = [];
+  if (v.medido) bien.push('Mediste la atmósfera antes de autorizar.');
+  else mal.push('No se midió la atmósfera: no había forma de saber si los vapores superaban el máximo.');
+  if (v.medido && v.vapores > 10) mal.push('La lectura era de ' + v.vapores + ' % del LIE, por encima del máximo de 10 %. Ese porcentaje es del límite inferior de explosividad, no de la mezcla total: una lectura de 14 % del LIE ya es alta.');
+  if (v.medido && v.vapores <= 10) bien.push('Con la ventilación, la lectura bajó a ' + v.vapores + ' % del LIE, por debajo del máximo.');
+  if (v.permiso === 'firmado') bien.push('El permiso de trabajo en caliente estaba firmado.');
+  else mal.push('El permiso de trabajo en caliente no estaba firmado.');
+  if (v.vigia) bien.push('Había un vigía de fuego con extintor durante el trabajo.');
+  else mal.push('No había vigía de fuego con extintor durante el trabajo.');
+  return { bien, mal };
+}
+
+function codigoRecorrido() {
+  return estado.historial.map(h => h.nodo + '-' + h.opcion).concat([estado.nodo]).join(', ');
+}
+
+function elegir(opId) {
+  const nodo = SIM.nodos[estado.nodo];
+  const op = nodo.opciones.find(o => o.id === opId);
+  estado.historial.push({ nodo: nodo.id, opcion: op.id, texto: op.texto });
+  Object.assign(estado.vars, op.efectos);
+  estado.nodo = op.destino;
+  render();
+}
+
+function pantallaInicio() {
+  return `<section class="tarjeta">
+    <h1 tabindex="-1" id="foco">${esc(SIM.titulo)}</h1>
+    <p>${esc(SIM.intro)}</p>
+    <p class="nota">${esc(SIM.parametro)}</p>
+    ${CAPA.registro.identificar ? `<label for="alu-nombre">Nombre y apellido</label>
+    <input type="text" id="alu-nombre" autocomplete="name" value="${esc(estado.alumno.nombre)}">
+    <label for="alu-legajo">Legajo o DNI (opcional)</label>
+    <input type="text" id="alu-legajo" value="${esc(estado.alumno.legajo)}">
+    <p class="error" id="err-alumno" role="alert"></p>` : ''}
+    <button class="primario" onclick="comenzar()">Comenzar</button>
+  </section>`;
+}
+
+function pantallaNodo(nodo) {
+  const paso = estado.historial.length + 1;
+  const ops = nodo.opciones.map(o => `<button class="op" onclick="elegir('${o.id}')"><b>${o.id}.</b>${esc(o.texto)}</button>`).join('');
+  return `<section class="tarjeta">
+    <p class="paso">Decisión ${paso}</p>
+    ${nodo.img ? `<figure><img src="${nodo.img}" alt="${esc(nodo.alt)}" onerror="this.parentNode.remove()"></figure>` : ''}
+    <h2 tabindex="-1" id="foco">${esc(nodo.titulo)}</h2>
+    <p>${esc(nodo.texto)}</p>
+    ${CAPA.voz && vozDisponible() ? '<div class="barra"><button class="secundario" onclick="escucharPantalla()">Escuchar</button><button class="secundario" onclick="detener()">Detener</button></div>' : ''}
+    ${ops}
+  </section>`;
+}
+
+function pantallaFinal(nodo) {
+  const a = analisis(estado.vars);
+  const li = arr => arr.map(t => `<li>${esc(t)}</li>`).join('');
+  const filas = resumenVars(estado.vars).map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('');
+  return `<section class="tarjeta ${nodo.resultado === 'seguro' ? 'final-seguro' : 'final-incidente'}">
+    <p class="paso">Resultado</p>
+    ${nodo.img ? `<figure><img src="${nodo.img}" alt="${esc(nodo.alt)}" onerror="this.parentNode.remove()"></figure>` : ''}
+    <h2 tabindex="-1" id="foco">${esc(nodo.titulo)}</h2>
+    <p>${esc(nodo.texto)}</p>
+    ${CAPA.voz && vozDisponible() ? '<div class="barra"><button class="secundario" onclick="escucharPantalla()">Escuchar</button><button class="secundario" onclick="detener()">Detener</button></div>' : ''}
+  </section>
+  <section class="tarjeta">
+    <h2>Tu recorrido</h2>
+    <p><b>${esc(codigoRecorrido())}</b></p>
+    <h2>Lo que no se veía mientras decidías</h2>
+    <table class="vars">${filas}</table>
+    ${a.mal.length ? '<h2 style="margin-top:16px">Qué faltó</h2><ul class="lista">' + li(a.mal) + '</ul>' : ''}
+    ${a.bien.length ? '<h2 style="margin-top:16px">Qué se hizo bien</h2><ul class="lista">' + li(a.bien) + '</ul>' : ''}
+  </section>
+  ${panelRegistro()}
+  <section class="tarjeta"><button class="secundario" onclick="reiniciar()">Volver a empezar</button></section>`;
+}
+
+function render() {
+  detener();
+  let html;
+  if (estado.nodo === 'INICIO') html = pantallaInicio();
+  else {
+    const nodo = SIM.nodos[estado.nodo];
+    html = nodo.final ? pantallaFinal(nodo) : pantallaNodo(nodo);
+  }
+  app.innerHTML = html + `<p class="pie">Las imágenes de este simulador fueron generadas con inteligencia artificial y no corresponden a una planta real.</p>`;
+  const f = document.getElementById('foco');
+  if (f) f.focus({ preventScroll: false });
+  window.scrollTo(0, 0);
+}
+
+function comenzar() {
+  if (CAPA.registro.identificar) {
+    const n = document.getElementById('alu-nombre').value.trim();
+    if (!n) { document.getElementById('err-alumno').textContent = 'Escribí tu nombre y apellido para empezar.'; return; }
+    estado.alumno = { nombre: n, legajo: document.getElementById('alu-legajo').value.trim() };
+  }
+  estado.nodo = 'N1';
+  render();
+}
+
+function reiniciar() {
+  const alumno = estado.alumno;
+  nuevoEstado();
+  estado.alumno = alumno;
+  estado.nodo = 'INICIO';
+  render();
+}
+
+nuevoEstado();
+estado.nodo = 'INICIO';
+render();
+
+// ---- Voz (síntesis del navegador) ----
+function vozDisponible() { return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window; }
+function hablar(texto) {
+  if (!vozDisponible()) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'es-AR';
+  const vs = window.speechSynthesis.getVoices();
+  const v = vs.find(x => x.lang === 'es-AR') || vs.find(x => x.lang && x.lang.toLowerCase().startsWith('es'));
+  if (v) u.voice = v;
+  u.rate = 0.95;
+  window.speechSynthesis.speak(u);
+}
+function detener() { if (vozDisponible()) window.speechSynthesis.cancel(); }
+function escucharPantalla() {
+  const nodo = SIM.nodos[estado.nodo];
+  let t = nodo.titulo + '. ' + nodo.voz;
+  if (!nodo.final) t += ' ' + nodo.opciones.map(o => 'Opción ' + o.id + ': ' + o.texto + '.').join(' ');
+  hablar(t);
+}
+
+// ---- Registro de resultados ----
+function datosRegistro() {
+  const nodo = SIM.nodos[estado.nodo];
+  return {
+    studentName: estado.alumno.nombre || 'Sin nombre',
+    studentId: estado.alumno.legajo || '-',
+    simTitle: SIM.titulo,
+    finalNode: nodo.id + ' - ' + nodo.titulo,
+    routeCode: codigoRecorrido(),
+    finalVars: 'vapores ' + estado.vars.vapores + ' % LIE | permiso ' + estado.vars.permiso + ' | ventilación ' + (estado.vars.ventilacion ? 'sí' : 'no') + ' | vigía ' + (estado.vars.vigia ? 'sí' : 'no'),
+    stepsDetail: estado.historial.map((h, i) => (i + 1) + '. ' + h.nodo + '-' + h.opcion + ' (' + h.texto + ')').join(' -> ')
+  };
+}
+function textoCodigo() {
+  const d = datosRegistro();
+  return 'SIMULADOR: ' + d.simTitle + '\nESTUDIANTE: ' + d.studentName + ' (' + d.studentId + ')\nRECORRIDO: ' + d.routeCode + '\nFINAL: ' + d.finalNode + '\nVARIABLES: ' + d.finalVars;
+}
+function copiarCodigo() {
+  const t = textoCodigo();
+  const ok = () => { document.getElementById('msg-registro').textContent = 'Código copiado. Pegalo en la tarea del aula virtual.'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, () => { seleccionarCodigo(); });
+  else seleccionarCodigo();
+}
+function seleccionarCodigo() {
+  const el = document.getElementById('codigo-resultado');
+  const r = document.createRange(); r.selectNodeContents(el);
+  const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  document.getElementById('msg-registro').textContent = 'Seleccionado: copialo con Ctrl+C (o mantené presionado en el celular).';
+}
+function urlFormulario() {
+  const d = datosRegistro();
+  const valores = { ESTUDIANTE: d.studentName + ' (' + d.studentId + ')', RECORRIDO: d.routeCode, RESULTADO: d.finalNode };
+  const u = new URL(CAPA.registro.forms.enlace);
+  const partes = [];
+  u.searchParams.forEach((v, k) => {
+    const real = (k.indexOf('entry.') === 0 && valores[v] !== undefined) ? valores[v] : v;
+    partes.push(k + '=' + encodeURIComponent(real));
+  });
+  return u.origin + u.pathname + '?' + partes.join('&');
+}
+function abrirFormulario() {
+  window.open(urlFormulario(), '_blank', 'noopener');
+  document.getElementById('msg-registro').textContent = 'Se abrió el formulario con tus datos ya completos. Falta que pulses Enviar.';
+}
+let enviado = false;
+async function enviarPlanilla() {
+  const btn = document.getElementById('btn-planilla');
+  if (enviado) return;
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    await fetch(CAPA.registro.planilla.url, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(datosRegistro())
+    });
+    enviado = true;
+    btn.textContent = 'Recorrido enviado';
+    document.getElementById('msg-registro').textContent = 'Se envió tu recorrido. El navegador no puede confirmar la recepción: si el docente no lo ve en la planilla, avisale.';
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Reintentar envío';
+    document.getElementById('msg-registro').textContent = 'No se pudo enviar. Revisá tu conexión y reintentá.';
+  }
+}
+function panelRegistro() {
+  const r = CAPA.registro;
+  let b = '<div class="barra"><button class="secundario" onclick="copiarCodigo()">Copiar código de resultado</button>';
+  if (r.forms.enlace) b += '<button class="primario" onclick="abrirFormulario()">Abrir formulario con mis datos</button>';
+  if (r.planilla.url) b += '<button class="primario" id="btn-planilla" onclick="enviarPlanilla()">Enviar mi recorrido a la planilla</button>';
+  b += '</div>';
+  return `<section class="tarjeta"><h2>Registro de tu recorrido</h2>
+    <div class="codigo" id="codigo-resultado">${esc(textoCodigo())}</div>
+    ${b}<p class="estado" id="msg-registro" role="status"></p></section>`;
+}
+
+</script>
+</body>
+</html>
